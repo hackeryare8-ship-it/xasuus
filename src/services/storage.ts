@@ -8,6 +8,7 @@ import {
   NotificationItem,
   AIChatMessage 
 } from '../types';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 // In-memory fallback if localStorage is undefined
 const memoryStore: Record<string, string> = {};
@@ -27,7 +28,7 @@ function setStorageItem(key: string, value: string): void {
   }
 }
 
-// Initial data for User A (Maxamed)
+// Initial default seed data for User A (Maxamed)
 const USER_A_DOCS: DocumentItem[] = [
   {
     id: 'doc_a_1',
@@ -101,33 +102,32 @@ const USER_A_MEMORIES: MemoryItem[] = [
   {
     id: 'mem_a_1',
     userId: 'user_maxamed',
-    title: 'Socdaalkii Xeebta Liido & Qorrax dhicii',
-    description: 'Galab aad u qurux badan oo aan la qaatay asxaabta jaamacadda. Dabayl qabow iyo sheekooyin xusuus reebay.',
-    date: '2026-02-05',
-    location: 'Liido Beach, Muqdisho',
+    title: 'Xafladda Qalin-jabinta Jaamacadda',
+    description: 'Maalin taariikhi ah oo aan ku qalin-jabinay Computer Science aniga iyo asxaabteyda. Waxaa goob-joog ahaa waalidkay iyo qoyska oo dhan.',
+    date: '2025-11-20',
+    location: 'Muqdisho, Soomaaliya',
     photos: [
-      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80',
-      'https://images.unsplash.com/photo-1519046904884-53103b34b206?w=800&auto=format&fit=crop&q=80'
+      'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80'
     ],
-    people: ['Cumar', 'Khaalid', 'Mustafe'],
-    tags: ['Xeeb', 'Liido', 'Asxaab', 'Nasasho'],
+    people: ['Aabe Cali', 'Hooyo Xawo', 'Axmed'],
+    tags: ['Jaamacad', 'Qalin-jabin', 'Qoys', 'Farxad'],
     isFavorite: true,
-    createdAt: '2026-02-05T19:00:00Z'
+    createdAt: '2025-11-20T12:00:00Z'
   },
   {
     id: 'mem_a_2',
     userId: 'user_maxamed',
-    title: 'Xafladdii Qalinjabinta Saaxiibkay',
-    description: 'Maalin taariikhi ah oo saaxiibkay Axmed qaatay Master-ka. Farxad weyn iyo qoyska oo dhan oo wada jira.',
-    date: '2026-01-25',
-    location: 'Hoteel Jazeera, Muqdisho',
+    title: 'Dalxiiskii Xeebta Liido & Qorrax Dhaca',
+    description: 'Galab cajiib ah oo aan ku qaadanay xeebta Liido. Dabeysha badda iyo daawashada qorrax dhaca waxay ahaayeen kuwo xusuus mudan.',
+    date: '2026-01-05',
+    location: 'Xeebta Liido, Muqdisho',
     photos: [
-      'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800&auto=format&fit=crop&q=80'
+      'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80'
     ],
-    people: ['Axmed', 'Farxaan', 'Cali'],
-    tags: ['Qalinjabin', 'Farxad', 'Guul'],
+    people: ['Jaamac', 'Guuleed'],
+    tags: ['Dalxiis', 'Liido', 'Badda', 'Nasasho'],
     isFavorite: true,
-    createdAt: '2026-01-25T20:30:00Z'
+    createdAt: '2026-01-05T17:30:00Z'
   }
 ];
 
@@ -135,14 +135,14 @@ const USER_A_REMINDERS: ReminderItem[] = [
   {
     id: 'rem_a_1',
     userId: 'user_maxamed',
-    title: 'Bixi Biilka Korontada iyo Biyaha',
-    description: 'Hubi in biilasha bishan la bixiyo ka hor inta aan la gaarin 25-ka bisha.',
+    title: 'Bixi Lacagta Korontada & Internet-ka',
+    description: 'Bixi biilasha bishan ka hor 25-ka bisha si aan adeeggu u go&apos;in.',
     date: '2026-08-25',
     time: '10:00',
     repeat: 'monthly',
     priority: 'sare',
     isCompleted: false,
-    createdAt: '2026-08-20T08:00:00Z'
+    createdAt: '2026-08-20T10:00:00Z'
   },
   {
     id: 'rem_a_2',
@@ -171,7 +171,7 @@ const USER_A_VOICE: VoiceNoteItem[] = [
   }
 ];
 
-// Initial data for User B (Hoodo) - COMPLETELY SEPARATE
+// Initial default seed data for User B (Hoodo)
 const USER_B_DOCS: DocumentItem[] = [
   {
     id: 'doc_b_1',
@@ -185,19 +185,6 @@ const USER_B_DOCS: DocumentItem[] = [
     isFavorite: true,
     summary: 'Qandaraaska shaqada Senior Product Designer muddo 2 sano ah.',
     uploadedAt: '2026-02-01T08:30:00Z',
-  },
-  {
-    id: 'doc_b_2',
-    userId: 'user_hoodo',
-    title: 'Qorshaha Miisaaniyadda Mashruuca 2026',
-    fileName: 'Project_Budget_2026.pdf',
-    fileSize: 1450000,
-    fileType: 'application/pdf',
-    category: 'Maaliyadda',
-    tags: ['Miisaaniyad', 'Finance', 'Mashruuc'],
-    isFavorite: false,
-    summary: 'Qiyaasta kharashaadka naqshadda iyo horumarinta website-ka cusub.',
-    uploadedAt: '2026-02-08T12:00:00Z',
   }
 ];
 
@@ -246,18 +233,6 @@ const USER_B_REMINDERS: ReminderItem[] = [
     priority: 'sare',
     isCompleted: false,
     createdAt: '2026-08-15T09:00:00Z'
-  },
-  {
-    id: 'rem_b_2',
-    userId: 'user_hoodo',
-    title: 'Kulan Macmiilka Cusub ee Hargeysa',
-    description: 'Bandhigga horudhaca ah ee Website-ka cusub.',
-    date: '2026-08-26',
-    time: '11:00',
-    repeat: 'none',
-    priority: 'dhexe',
-    isCompleted: false,
-    createdAt: '2026-08-18T10:30:00Z'
   }
 ];
 
@@ -279,7 +254,9 @@ export class StorageService {
     return `xasuus_app_${userId}_${entity}`;
   }
 
-  // Documents
+  // --------------------------------------------------------
+  // DOCUMENTS
+  // --------------------------------------------------------
   static getDocuments(userId: string): DocumentItem[] {
     const key = this.getKey(userId, 'documents');
     const data = getStorageItem(key);
@@ -297,7 +274,39 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static saveDocument(userId: string, doc: DocumentItem): void {
+  static async fetchDocumentsRemote(userId: string): Promise<DocumentItem[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('documents')
+          .select('*')
+          .order('uploaded_at', { ascending: false });
+
+        if (!error && data) {
+          const mapped: DocumentItem[] = data.map(d => ({
+            id: d.id,
+            userId: d.user_id,
+            title: d.title,
+            fileName: d.file_name,
+            fileSize: Number(d.file_size || 0),
+            fileType: d.file_type,
+            category: d.category,
+            tags: d.tags || [],
+            isFavorite: d.is_favorite,
+            summary: d.summary,
+            uploadedAt: d.uploaded_at
+          }));
+          setStorageItem(this.getKey(userId, 'documents'), JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Supabase fetchDocuments error, using local storage:', err);
+      }
+    }
+    return this.getDocuments(userId);
+  }
+
+  static async saveDocument(userId: string, doc: DocumentItem): Promise<void> {
     const docs = this.getDocuments(userId);
     const idx = docs.findIndex(d => d.id === doc.id);
     if (idx >= 0) {
@@ -306,14 +315,44 @@ export class StorageService {
       docs.unshift({ ...doc, userId });
     }
     setStorageItem(this.getKey(userId, 'documents'), JSON.stringify(docs));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('documents').upsert({
+          id: doc.id,
+          user_id: userId,
+          title: doc.title,
+          file_name: doc.fileName,
+          file_size: doc.fileSize,
+          file_type: doc.fileType,
+          category: doc.category,
+          tags: doc.tags,
+          is_favorite: doc.isFavorite,
+          summary: doc.summary,
+          uploaded_at: doc.uploadedAt
+        });
+      } catch (err) {
+        console.warn('Supabase saveDocument error:', err);
+      }
+    }
   }
 
-  static deleteDocument(userId: string, docId: string): void {
+  static async deleteDocument(userId: string, docId: string): Promise<void> {
     const docs = this.getDocuments(userId).filter(d => d.id !== docId);
     setStorageItem(this.getKey(userId, 'documents'), JSON.stringify(docs));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('documents').delete().eq('id', docId);
+      } catch (err) {
+        console.warn('Supabase deleteDocument error:', err);
+      }
+    }
   }
 
-  // Notes
+  // --------------------------------------------------------
+  // NOTES
+  // --------------------------------------------------------
   static getNotes(userId: string): NoteItem[] {
     const key = this.getKey(userId, 'notes');
     const data = getStorageItem(key);
@@ -331,7 +370,37 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static saveNote(userId: string, note: NoteItem): void {
+  static async fetchNotesRemote(userId: string): Promise<NoteItem[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .order('updated_at', { ascending: false });
+
+        if (!error && data) {
+          const mapped: NoteItem[] = data.map(n => ({
+            id: n.id,
+            userId: n.user_id,
+            title: n.title,
+            content: n.content,
+            category: n.category,
+            tags: n.tags || [],
+            isFavorite: n.is_favorite,
+            createdAt: n.created_at,
+            updatedAt: n.updated_at
+          }));
+          setStorageItem(this.getKey(userId, 'notes'), JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Supabase fetchNotes error, using local storage:', err);
+      }
+    }
+    return this.getNotes(userId);
+  }
+
+  static async saveNote(userId: string, note: NoteItem): Promise<void> {
     const notes = this.getNotes(userId);
     const idx = notes.findIndex(n => n.id === note.id);
     if (idx >= 0) {
@@ -340,14 +409,42 @@ export class StorageService {
       notes.unshift({ ...note, userId });
     }
     setStorageItem(this.getKey(userId, 'notes'), JSON.stringify(notes));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('notes').upsert({
+          id: note.id,
+          user_id: userId,
+          title: note.title,
+          content: note.content,
+          category: note.category,
+          tags: note.tags,
+          is_favorite: note.isFavorite,
+          created_at: note.createdAt,
+          updated_at: note.updatedAt || new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase saveNote error:', err);
+      }
+    }
   }
 
-  static deleteNote(userId: string, noteId: string): void {
+  static async deleteNote(userId: string, noteId: string): Promise<void> {
     const notes = this.getNotes(userId).filter(n => n.id !== noteId);
     setStorageItem(this.getKey(userId, 'notes'), JSON.stringify(notes));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('notes').delete().eq('id', noteId);
+      } catch (err) {
+        console.warn('Supabase deleteNote error:', err);
+      }
+    }
   }
 
-  // Memories
+  // --------------------------------------------------------
+  // MEMORIES
+  // --------------------------------------------------------
   static getMemories(userId: string): MemoryItem[] {
     const key = this.getKey(userId, 'memories');
     const data = getStorageItem(key);
@@ -365,7 +462,37 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static saveMemory(userId: string, memory: MemoryItem): void {
+  static async fetchMemoriesRemote(userId: string): Promise<MemoryItem[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('memories')
+          .select('*')
+          .order('date', { ascending: false });
+
+        if (!error && data) {
+          const mapped: MemoryItem[] = data.map(m => ({
+            id: m.id,
+            userId: m.user_id,
+            title: m.title,
+            description: m.description,
+            date: m.date,
+            photos: m.image_url ? [m.image_url] : [],
+            tags: m.tags || [],
+            isFavorite: m.is_favorite,
+            createdAt: m.created_at
+          }));
+          setStorageItem(this.getKey(userId, 'memories'), JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Supabase fetchMemories error, using local storage:', err);
+      }
+    }
+    return this.getMemories(userId);
+  }
+
+  static async saveMemory(userId: string, memory: MemoryItem): Promise<void> {
     const memories = this.getMemories(userId);
     const idx = memories.findIndex(m => m.id === memory.id);
     if (idx >= 0) {
@@ -374,14 +501,43 @@ export class StorageService {
       memories.unshift({ ...memory, userId });
     }
     setStorageItem(this.getKey(userId, 'memories'), JSON.stringify(memories));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('memories').upsert({
+          id: memory.id,
+          user_id: userId,
+          title: memory.title,
+          description: memory.description,
+          date: memory.date,
+          category: 'Xusuus',
+          tags: memory.tags,
+          is_favorite: memory.isFavorite,
+          image_url: memory.photos?.[0] || null,
+          created_at: memory.createdAt
+        });
+      } catch (err) {
+        console.warn('Supabase saveMemory error:', err);
+      }
+    }
   }
 
-  static deleteMemory(userId: string, memoryId: string): void {
+  static async deleteMemory(userId: string, memoryId: string): Promise<void> {
     const memories = this.getMemories(userId).filter(m => m.id !== memoryId);
     setStorageItem(this.getKey(userId, 'memories'), JSON.stringify(memories));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('memories').delete().eq('id', memoryId);
+      } catch (err) {
+        console.warn('Supabase deleteMemory error:', err);
+      }
+    }
   }
 
-  // Reminders
+  // --------------------------------------------------------
+  // REMINDERS
+  // --------------------------------------------------------
   static getReminders(userId: string): ReminderItem[] {
     const key = this.getKey(userId, 'reminders');
     const data = getStorageItem(key);
@@ -399,7 +555,38 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static saveReminder(userId: string, reminder: ReminderItem): void {
+  static async fetchRemindersRemote(userId: string): Promise<ReminderItem[]> {
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase
+          .from('reminders')
+          .select('*')
+          .order('due_date', { ascending: true });
+
+        if (!error && data) {
+          const mapped: ReminderItem[] = data.map(r => ({
+            id: r.id,
+            userId: r.user_id,
+            title: r.title,
+            description: '',
+            date: r.due_date,
+            time: r.time,
+            repeat: 'none',
+            priority: r.priority === 'sare' || r.priority === 'hoose' ? r.priority : 'dhexe',
+            isCompleted: r.is_completed,
+            createdAt: r.created_at
+          }));
+          setStorageItem(this.getKey(userId, 'reminders'), JSON.stringify(mapped));
+          return mapped;
+        }
+      } catch (err) {
+        console.warn('Supabase fetchReminders error, using local storage:', err);
+      }
+    }
+    return this.getReminders(userId);
+  }
+
+  static async saveReminder(userId: string, reminder: ReminderItem): Promise<void> {
     const reminders = this.getReminders(userId);
     const idx = reminders.findIndex(r => r.id === reminder.id);
     if (idx >= 0) {
@@ -408,25 +595,44 @@ export class StorageService {
       reminders.unshift({ ...reminder, userId });
     }
     setStorageItem(this.getKey(userId, 'reminders'), JSON.stringify(reminders));
-  }
 
-  static toggleReminderComplete(userId: string, reminderId: string): void {
-    const reminders = this.getReminders(userId);
-    const reminder = reminders.find(r => r.id === reminderId);
-    if (reminder) {
-      reminder.isCompleted = !reminder.isCompleted;
-      setStorageItem(this.getKey(userId, 'reminders'), JSON.stringify(reminders));
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('reminders').upsert({
+          id: reminder.id,
+          user_id: userId,
+          title: reminder.title,
+          due_date: reminder.date,
+          time: reminder.time,
+          category: 'Guud',
+          priority: reminder.priority,
+          is_completed: reminder.isCompleted,
+          created_at: reminder.createdAt
+        });
+      } catch (err) {
+        console.warn('Supabase saveReminder error:', err);
+      }
     }
   }
 
-  static deleteReminder(userId: string, reminderId: string): void {
+  static async deleteReminder(userId: string, reminderId: string): Promise<void> {
     const reminders = this.getReminders(userId).filter(r => r.id !== reminderId);
     setStorageItem(this.getKey(userId, 'reminders'), JSON.stringify(reminders));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('reminders').delete().eq('id', reminderId);
+      } catch (err) {
+        console.warn('Supabase deleteReminder error:', err);
+      }
+    }
   }
 
-  // Voice Notes
+  // --------------------------------------------------------
+  // VOICE NOTES
+  // --------------------------------------------------------
   static getVoiceNotes(userId: string): VoiceNoteItem[] {
-    const key = this.getKey(userId, 'voice_notes');
+    const key = this.getKey(userId, 'voice');
     const data = getStorageItem(key);
     if (!data) {
       if (userId === 'user_maxamed') {
@@ -442,34 +648,61 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static saveVoiceNote(userId: string, voiceNote: VoiceNoteItem): void {
-    const voiceNotes = this.getVoiceNotes(userId);
-    const idx = voiceNotes.findIndex(v => v.id === voiceNote.id);
+  static async saveVoiceNote(userId: string, voice: VoiceNoteItem): Promise<void> {
+    const voices = this.getVoiceNotes(userId);
+    const idx = voices.findIndex(v => v.id === voice.id);
     if (idx >= 0) {
-      voiceNotes[idx] = { ...voiceNote, userId };
+      voices[idx] = { ...voice, userId };
     } else {
-      voiceNotes.unshift({ ...voiceNote, userId });
+      voices.unshift({ ...voice, userId });
     }
-    setStorageItem(this.getKey(userId, 'voice_notes'), JSON.stringify(voiceNotes));
+    setStorageItem(this.getKey(userId, 'voice'), JSON.stringify(voices));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('voice_notes').upsert({
+          id: voice.id,
+          user_id: userId,
+          title: voice.title,
+          duration: `${voice.durationSeconds}s`,
+          audio_url: voice.audioBlobUrl || '',
+          category: 'Cod',
+          is_favorite: voice.isFavorite,
+          transcript: voice.transcript,
+          created_at: voice.createdAt
+        });
+      } catch (err) {
+        console.warn('Supabase saveVoiceNote error:', err);
+      }
+    }
   }
 
-  static deleteVoiceNote(userId: string, voiceNoteId: string): void {
-    const voiceNotes = this.getVoiceNotes(userId).filter(v => v.id !== voiceNoteId);
-    setStorageItem(this.getKey(userId, 'voice_notes'), JSON.stringify(voiceNotes));
+  static async deleteVoiceNote(userId: string, voiceId: string): Promise<void> {
+    const voices = this.getVoiceNotes(userId).filter(v => v.id !== voiceId);
+    setStorageItem(this.getKey(userId, 'voice'), JSON.stringify(voices));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('voice_notes').delete().eq('id', voiceId);
+      } catch (err) {
+        console.warn('Supabase deleteVoiceNote error:', err);
+      }
+    }
   }
 
-  // Notifications
+  // --------------------------------------------------------
+  // NOTIFICATIONS
+  // --------------------------------------------------------
   static getNotifications(userId: string): NotificationItem[] {
     const key = this.getKey(userId, 'notifications');
     const data = getStorageItem(key);
     if (!data) {
       const defaultNotifs: NotificationItem[] = [
         {
-          id: `notif_${Date.now()}`,
-          userId,
-          title: 'Ku soo dhowow Xasuus!',
-          message: 'Xogtaadu waa mid si buuxda u qarsoon oo adiga kuu gaar ah.',
-          type: 'system',
+          id: 'notif_welcome',
+          title: 'Ku soo dhawoow Xasuus',
+          message: 'Kusoo dhawaaw nidaamkaaga xafidista dukumiintiyada iyo xusuusyada gaarka ah.',
+          type: 'info',
           isRead: false,
           timestamp: new Date().toISOString()
         }
@@ -480,39 +713,52 @@ export class StorageService {
     return JSON.parse(data);
   }
 
-  static markNotificationRead(userId: string, notifId: string): void {
-    const notifs = this.getNotifications(userId);
-    const notif = notifs.find(n => n.id === notifId);
-    if (notif) {
-      notif.isRead = true;
-      setStorageItem(this.getKey(userId, 'notifications'), JSON.stringify(notifs));
-    }
+  static async saveNotifications(userId: string, notifs: NotificationItem[]): Promise<void> {
+    setStorageItem(this.getKey(userId, 'notifications'), JSON.stringify(notifs));
   }
 
-  static clearAllNotifications(userId: string): void {
-    setStorageItem(this.getKey(userId, 'notifications'), JSON.stringify([]));
-  }
-
-  // AI Chat History
+  // --------------------------------------------------------
+  // AI CHAT HISTORY
+  // --------------------------------------------------------
   static getAIChatHistory(userId: string, userName: string): AIChatMessage[] {
-    const key = this.getKey(userId, 'ai_chat');
+    const key = this.getKey(userId, 'aichat');
     const data = getStorageItem(key);
     if (!data) {
-      const defaultChat: AIChatMessage[] = [
+      const initialChat: AIChatMessage[] = [
         {
-          id: 'ai_welcome',
-          sender: 'assistant',
-          text: `Asc ${userName}! 👋 Waxaan ahay Xasuus AI Assistant. Sideen maanta kuu caawin karaa? Waxaan marin u leeyahay oo kaliya xogtaada gaarka ah.`,
+          id: 'chat_welcome',
+          sender: 'ai',
+          message: `Asc ${userName}! Waxaan ahay Xasuus AI Assistant. Maxaan maanta kugu caawin karaa? Waxaad i weydiin kartaa dukumiintiyadaada, qoraalladaada, ama xusuusahaaga.`,
           timestamp: new Date().toISOString()
         }
       ];
-      setStorageItem(key, JSON.stringify(defaultChat));
-      return defaultChat;
+      setStorageItem(key, JSON.stringify(initialChat));
+      return initialChat;
     }
     return JSON.parse(data);
   }
 
-  static saveAIChatHistory(userId: string, messages: AIChatMessage[]): void {
-    setStorageItem(this.getKey(userId, 'ai_chat'), JSON.stringify(messages));
+  static async saveAIChatMessage(userId: string, message: AIChatMessage): Promise<void> {
+    const history = this.getAIChatHistory(userId, '');
+    history.push(message);
+    setStorageItem(this.getKey(userId, 'aichat'), JSON.stringify(history));
+
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('ai_chats').insert({
+          id: message.id,
+          user_id: userId,
+          sender: message.sender,
+          message: message.message,
+          timestamp: message.timestamp
+        });
+      } catch (err) {
+        console.warn('Supabase saveAIChatMessage error:', err);
+      }
+    }
+  }
+
+  static clearAIChatHistory(userId: string): void {
+    setStorageItem(this.getKey(userId, 'aichat'), JSON.stringify([]));
   }
 }

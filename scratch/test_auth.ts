@@ -18,7 +18,7 @@ async function runPremiumAnimationAndPhotoTests() {
   // 3. Profile photo upload and update for User A
   console.log('\n--- TEST 2: Profile Photo Upload & Update ---');
   const customAvatarDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-  const updatedUser = AuthService.updateUserProfile('user_maxamed', {
+  const updatedUser = await AuthService.updateUserProfile('user_maxamed', {
     avatar: customAvatarDataUrl
   });
   console.log('Profile Photo Updated:', updatedUser?.avatar === customAvatarDataUrl);
@@ -45,7 +45,7 @@ async function runPremiumAnimationAndPhotoTests() {
 
   // Update Hoodo's avatar with another custom photo
   const hoodoAvatarDataUrl = 'data:image/webp;base64,UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==';
-  AuthService.updateUserProfile('user_hoodo', { avatar: hoodoAvatarDataUrl });
+  await AuthService.updateUserProfile('user_hoodo', { avatar: hoodoAvatarDataUrl });
 
   const maxamedAccount = AuthService.getAccounts().find(a => a.id === 'user_maxamed');
   const hoodoAccount = AuthService.getAccounts().find(a => a.id === 'user_hoodo');

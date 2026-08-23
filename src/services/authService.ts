@@ -1,4 +1,5 @@
 import { UserProfile } from '../types';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 export interface AuthSession {
   token: string;
@@ -29,7 +30,7 @@ const USERS_STORAGE_KEY = 'xasuus_auth_accounts';
 const SESSION_STORAGE_KEY = 'xasuus_auth_session';
 const RESET_CODES_KEY = 'xasuus_auth_reset_codes';
 
-// In-memory fallback if localStorage is undefined (e.g. during Node testing)
+// In-memory fallback if localStorage is undefined
 const memoryStore: Record<string, string> = {};
 
 function getStorageItem(key: string): string | null {
@@ -55,7 +56,7 @@ function removeStorageItem(key: string): void {
   }
 }
 
-// Standard Email regex validation (supports all providers: Gmail, Outlook, Yahoo, iCloud, Proton, etc.)
+// Standard Email regex validation
 export function isValidEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email.trim());
@@ -185,31 +186,49 @@ export class AuthService {
     }
   }
 
-  // Update authenticated user's profile and persist across session and accounts
-  static updateUserProfile(userId: string, updates: Partial<UserProfile>): UserProfile | null {
+  // Update authenticated user's profile and persist across session, Supabase, and accounts
+  static async updateUserProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile | null> {
     const accounts = this.getAccounts();
     const idx = accounts.findIndex(a => a.id === userId);
-    if (idx === -1) return null;
+    if (idx >= 0) {
+      accounts[idx].profile = {
+        ...accounts[idx].profile,
+        ...updates
+      };
+      this.saveAccounts(accounts);
+    }
 
-    const updatedProfile: UserProfile = {
-      ...accounts[idx].profile,
-      ...updates
-    };
-
-    accounts[idx].profile = updatedProfile;
-    this.saveAccounts(accounts);
-
-    // Update active session if this is the active user
+    // Update active session
+    let updatedProfile: UserProfile | null = null;
     const activeSession = this.getActiveSession();
     if (activeSession && activeSession.user.id === userId) {
+      updatedProfile = {
+        ...activeSession.user,
+        ...updates
+      };
       activeSession.user = updatedProfile;
       setStorageItem(SESSION_STORAGE_KEY, JSON.stringify(activeSession));
+    }
+
+    // Sync to Supabase profiles table if connected
+    if (isSupabaseConfigured()) {
+      try {
+        await supabase.from('profiles').upsert({
+          id: userId,
+          name: updates.name,
+          avatar: updates.avatar,
+          bio: updates.bio,
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Supabase profile update warning:', err);
+      }
     }
 
     return updatedProfile;
   }
 
-  // Real Account Validation and Login
+  // Real Account Validation and Login (Supabase Auth + fallback)
   static async login(
     rawEmail: string, 
     password: string
@@ -221,21 +240,70 @@ export class AuthService {
       return { success: false, error: 'Fadlan geli email sax ah (tusaale: user@domain.com).' };
     }
 
+    // Attempt Supabase Auth login if configured
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: cleanEmail,
+          password
+        });
+
+        if (!error && data.user) {
+          // Fetch or generate profile
+          let userProfile: UserProfile = {
+            id: data.user.id,
+            name: data.user.user_metadata?.name || cleanEmail.split('@')[0],
+            email: data.user.email || cleanEmail,
+            avatar: data.user.user_metadata?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.user.id)}`,
+            createdAt: data.user.created_at || new Date().toISOString()
+          };
+
+          // Check if profile exists in public.profiles table
+          const { data: profileRow } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+
+          if (profileRow) {
+            userProfile = {
+              id: profileRow.id,
+              name: profileRow.name,
+              email: profileRow.email,
+              avatar: profileRow.avatar || userProfile.avatar,
+              bio: profileRow.bio || '',
+              createdAt: profileRow.created_at
+            };
+          }
+
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+          const session: AuthSession = {
+            token: data.session?.access_token || generateToken(),
+            user: userProfile,
+            expiresAt
+          };
+
+          setStorageItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+          return { success: true, session, user: userProfile };
+        }
+      } catch (err) {
+        console.warn('Supabase login warning, trying local storage:', err);
+      }
+    }
+
+    // Local authentication fallback
     const accounts = this.getAccounts();
     const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
 
-    // If account does not exist -> Reject explicitly
     if (!account) {
       return { success: false, error: 'Email-ka ama password-ka waa khaldan yahay.' };
     }
 
-    // Verify password securely with salt and PBKDF2 hash
     const testHash = await hashPassword(password, account.salt);
     if (testHash !== account.passwordHash) {
       return { success: false, error: 'Email-ka ama password-ka waa khaldan yahay.' };
     }
 
-    // Ensure profile exists for the user
     let userProfile = account.profile;
     if (!userProfile || !userProfile.id) {
       userProfile = {
@@ -249,7 +317,6 @@ export class AuthService {
       this.saveAccounts(accounts);
     }
 
-    // Create session (valid for 7 days)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const session: AuthSession = {
       token: generateToken(),
@@ -261,7 +328,7 @@ export class AuthService {
     return { success: true, session, user: userProfile };
   }
 
-  // Public User Registration: creates real authentication account, profile, and active session
+  // Public User Registration (Supabase Auth + fallback)
   static async register(
     name: string, 
     rawEmail: string, 
@@ -271,18 +338,66 @@ export class AuthService {
     const cleanEmail = rawEmail.toLowerCase().trim();
 
     if (!isValidEmail(cleanEmail)) {
-      return { success: false, error: 'Fadlan geli email sax ah (tusaale: user@outlook.com, user@gmail.com, iwm).' };
-    }
-
-    const accounts = this.getAccounts();
-
-    // Check for duplicate account
-    if (accounts.some(a => a.email.toLowerCase() === cleanEmail)) {
-      return { success: false, error: 'Account-kan hore ayuu u jiray. Fadlan gal.' };
+      return { success: false, error: 'Fadlan geli email sax ah (tusaale: user@gmail.com).' };
     }
 
     if (password.length < 8) {
       return { success: false, error: 'Password-ku waa inuu ka koobnaadaa ugu yaraan 8 xaraf.' };
+    }
+
+    // Attempt Supabase Registration if configured
+    if (isSupabaseConfigured()) {
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanEmail,
+          password,
+          options: {
+            data: {
+              name: name.trim()
+            }
+          }
+        });
+
+        if (!error && data.user) {
+          const userProfile: UserProfile = {
+            id: data.user.id,
+            name: name.trim(),
+            email: cleanEmail,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name.trim())}`,
+            createdAt: new Date().toISOString()
+          };
+
+          // Insert into profiles table
+          await supabase.from('profiles').upsert({
+            id: data.user.id,
+            name: name.trim(),
+            email: cleanEmail,
+            avatar: userProfile.avatar,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+          const session: AuthSession = {
+            token: data.session?.access_token || generateToken(),
+            user: userProfile,
+            expiresAt
+          };
+
+          setStorageItem(SESSION_STORAGE_KEY, JSON.stringify(session));
+          return { success: true, session, user: userProfile };
+        } else if (error) {
+          console.warn('Supabase signUp error message:', error.message);
+        }
+      } catch (err) {
+        console.warn('Supabase register warning, trying local storage:', err);
+      }
+    }
+
+    // Local registration fallback
+    const accounts = this.getAccounts();
+    if (accounts.some(a => a.email.toLowerCase() === cleanEmail)) {
+      return { success: false, error: 'Account-kan hore ayuu u jiray. Fadlan gal.' };
     }
 
     const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -309,7 +424,6 @@ export class AuthService {
     accounts.push(newAccount);
     this.saveAccounts(accounts);
 
-    // Create session (valid for 7 days)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const session: AuthSession = {
       token: generateToken(),
@@ -326,7 +440,7 @@ export class AuthService {
     };
   }
 
-  // Send Password Reset Code (Real Account Existence Verification)
+  // Password Reset Code
   static async sendPasswordResetCode(rawEmail: string): Promise<{ success: boolean; code?: string; error?: string }> {
     await this.init();
     const cleanEmail = rawEmail.toLowerCase().trim();
@@ -335,16 +449,8 @@ export class AuthService {
       return { success: false, error: 'Fadlan geli email sax ah.' };
     }
 
-    const accounts = this.getAccounts();
-    const account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
-
-    if (!account) {
-      return { success: false, error: 'Account-kan lama helin. Fadlan hubi email-kaaga ama is diiwaangeli.' };
-    }
-
-    // Generate cryptographically secure random 6-digit code
     const randomCode = generateNumericCode();
-    const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes TTL
+    const expiresAt = Date.now() + 5 * 60 * 1000;
 
     const resetData: PasswordResetCode = {
       email: cleanEmail,
@@ -412,24 +518,23 @@ export class AuthService {
     const accounts = this.getAccounts();
     const accountIndex = accounts.findIndex(a => a.email.toLowerCase() === cleanEmail);
 
-    if (accountIndex === -1) {
-      return { success: false, error: 'Account-kan lama helin.' };
+    if (accountIndex >= 0) {
+      const newSalt = generateSalt();
+      const newHash = await hashPassword(newPassword, newSalt);
+      accounts[accountIndex].salt = newSalt;
+      accounts[accountIndex].passwordHash = newHash;
+      this.saveAccounts(accounts);
     }
 
-    const newSalt = generateSalt();
-    const newHash = await hashPassword(newPassword, newSalt);
-
-    accounts[accountIndex].salt = newSalt;
-    accounts[accountIndex].passwordHash = newHash;
-
-    this.saveAccounts(accounts);
     removeStorageItem(RESET_CODES_KEY);
-
     return { success: true };
   }
 
   // Logout (End session & clear sensitive state)
   static logout(): void {
+    if (isSupabaseConfigured()) {
+      supabase.auth.signOut().catch(() => {});
+    }
     removeStorageItem(SESSION_STORAGE_KEY);
   }
 }

@@ -106,9 +106,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [addModalType, setAddModalType] = useState<'all' | 'document' | 'note' | 'memory' | 'reminder' | 'voice'>('all');
 
-  // Load user-specific isolated data on auth change
+  // Load user-specific isolated data on auth change & trigger cloud sync
   useEffect(() => {
     if (user && user.id) {
+      // Instant local cache load
       setDocuments(StorageService.getDocuments(user.id));
       setNotes(StorageService.getNotes(user.id));
       setMemories(StorageService.getMemories(user.id));
@@ -116,6 +117,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setVoiceNotes(StorageService.getVoiceNotes(user.id));
       setNotifications(StorageService.getNotifications(user.id));
       setAiChatHistory(StorageService.getAIChatHistory(user.id, user.name));
+
+      // Asynchronous Supabase Cloud Sync
+      StorageService.fetchDocumentsRemote(user.id).then(d => setDocuments(d));
+      StorageService.fetchNotesRemote(user.id).then(n => setNotes(n));
+      StorageService.fetchMemoriesRemote(user.id).then(m => setMemories(m));
+      StorageService.fetchRemindersRemote(user.id).then(r => setReminders(r));
     } else {
       // Clear all state when logged out
       setDocuments([]);
@@ -283,8 +290,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const toggleReminderComplete = (id: string) => {
     if (!user) return;
-    StorageService.toggleReminderComplete(user.id, id);
-    setReminders(StorageService.getReminders(user.id));
+    const rem = reminders.find(r => r.id === id);
+    if (rem) {
+      const updated = { ...rem, isCompleted: !rem.isCompleted };
+      StorageService.saveReminder(user.id, updated);
+      setReminders(StorageService.getReminders(user.id));
+    }
   };
 
   // Voice Notes
@@ -319,31 +330,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const markNotificationAsRead = (id: string) => {
     if (!user) return;
-    StorageService.markNotificationRead(user.id, id);
-    setNotifications(StorageService.getNotifications(user.id));
+    const updated = notifications.map(n => n.id === id ? { ...n, isRead: true } : n);
+    StorageService.saveNotifications(user.id, updated);
+    setNotifications(updated);
   };
 
   const clearNotifications = () => {
     if (!user) return;
-    StorageService.clearAllNotifications(user.id);
+    StorageService.saveNotifications(user.id, []);
     setNotifications([]);
   };
 
   // AI Chat
   const addAIMessage = (msg: AIChatMessage) => {
     if (!user) return;
-    const updated = [...aiChatHistory, msg];
-    setAiChatHistory(updated);
-    StorageService.saveAIChatHistory(user.id, updated);
+    StorageService.saveAIChatMessage(user.id, msg);
+    setAiChatHistory(StorageService.getAIChatHistory(user.id, user.name));
   };
 
   const clearAIChat = () => {
     if (!user) return;
+    StorageService.clearAIChatHistory(user.id);
     setAiChatHistory([]);
-    StorageService.saveAIChatHistory(user.id, []);
   };
 
-  // Stats calculation
+  // Aggregated live statistics
   const stats = useMemo(() => {
     const totalDocs = documents.length;
     const totalNotes = notes.length;
@@ -351,11 +362,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const totalReminders = reminders.length;
     const pendingReminders = reminders.filter(r => !r.isCompleted).length;
     const totalVoice = voiceNotes.length;
-    const totalFavorites = 
-      documents.filter(d => d.isFavorite).length +
-      notes.filter(n => n.isFavorite).length +
-      memories.filter(m => m.isFavorite).length +
-      voiceNotes.filter(v => v.isFavorite).length;
+    
+    const favDocs = documents.filter(d => d.isFavorite).length;
+    const favNotes = notes.filter(n => n.isFavorite).length;
+    const favMem = memories.filter(m => m.isFavorite).length;
+    const favVoice = voiceNotes.filter(v => v.isFavorite).length;
+    const totalFavorites = favDocs + favNotes + favMem + favVoice;
 
     return {
       totalDocs,
