@@ -94,7 +94,7 @@ export const Header: React.FC = () => {
 
           {/* Add Menu Dropdown */}
           {isAddMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#ece9df] py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150 modal-enter">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-[#ece9df] py-2 z-50 dropdown-enter">
               <div className="px-3 py-1.5 text-[11px] font-bold text-[#718096] uppercase tracking-wider">
                 Ku dar shay cusub
               </div>
@@ -162,7 +162,7 @@ export const Header: React.FC = () => {
 
           {/* Notifications Dropdown */}
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#ece9df] py-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 modal-enter">
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-[#ece9df] py-3 z-50 dropdown-enter">
               <div className="px-4 py-1.5 flex items-center justify-between border-b border-[#ece9df] pb-2">
                 <span className="font-bold text-[14px] text-[#1a202c]">Ogeysiisyada ({unreadNotifs.length})</span>
                 {unreadNotifs.length > 0 && (
@@ -228,7 +228,7 @@ export const Header: React.FC = () => {
 
           {/* Profile Dropdown */}
           {isProfileOpen && (
-            <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-[#ece9df] p-3 z-50 animate-in fade-in slide-in-from-top-2 duration-150 modal-enter">
+            <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-[#ece9df] p-3 z-50 dropdown-enter">
               <div className="flex items-center gap-3 p-2.5 bg-[#fbf9f0] rounded-xl mb-3">
                 <img 
                   src={currentUser.avatar} 

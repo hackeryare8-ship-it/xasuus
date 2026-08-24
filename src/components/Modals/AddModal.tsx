@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   X, 
   FileText, 
@@ -7,7 +7,10 @@ import {
   Bell, 
   Mic, 
   Upload, 
-  Check 
+  Check,
+  Camera,
+  Image as ImageIcon,
+  AlertCircle
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
@@ -32,6 +35,9 @@ export const AddModal: React.FC = () => {
   const [docCategory, setDocCategory] = useState('Heshiisyo');
   const [docTags, setDocTags] = useState('');
   const [docSummary, setDocSummary] = useState('');
+  const [docFileName, setDocFileName] = useState('');
+  const [docFileSize, setDocFileSize] = useState<number>(0);
+  const docFileRef = useRef<HTMLInputElement>(null);
 
   // Note form
   const [noteTitle, setNoteTitle] = useState('');
@@ -46,6 +52,9 @@ export const AddModal: React.FC = () => {
   const [memLocation, setMemLocation] = useState('');
   const [memPeople, setMemPeople] = useState('');
   const [memPhotos, setMemPhotos] = useState('');
+  const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const memPhotoInputRef = useRef<HTMLInputElement>(null);
 
   // Reminder form
   const [remTitle, setRemTitle] = useState('');
@@ -61,13 +70,54 @@ export const AddModal: React.FC = () => {
 
   if (!isAddModalOpen) return null;
 
+  // Handle Memory Photo Selection
+  const handleMemoryPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setImageError(null);
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file) => {
+      const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+      if (!validTypes.includes(file.type)) {
+        setImageError('Fadlan dooro sawir JPG, PNG ama WEBP ah oo ka yar 5MB.');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        setImageError('Fadlan dooro sawir JPG, PNG ama WEBP ah oo ka yar 5MB.');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          setUploadedPhotos(prev => [...prev, event.target!.result as string]);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+  };
+
+  // Handle Document File Selection
+  const handleDocFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setDocFileName(file.name);
+    setDocFileSize(file.size);
+    if (!docTitle) {
+      setDocTitle(file.name.replace(/\.[^/.]+$/, ''));
+    }
+  };
+
   const handleDocumentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!docTitle.trim()) return;
     addDocument({
       title: docTitle,
-      fileName: `${docTitle.toLowerCase().replace(/\s+/g, '_')}.pdf`,
-      fileSize: 1024 * 1024 * (Math.floor(Math.random() * 4) + 1),
+      fileName: docFileName || `${docTitle.toLowerCase().replace(/\s+/g, '_')}.pdf`,
+      fileSize: docFileSize || 1024 * 1024 * (Math.floor(Math.random() * 4) + 1),
       fileType: 'application/pdf',
       category: docCategory,
       tags: docTags.split(',').map(t => t.trim()).filter(Boolean),
@@ -94,15 +144,20 @@ export const AddModal: React.FC = () => {
   const handleMemorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!memTitle.trim()) return;
-    const photosArray = memPhotos ? memPhotos.split(',').map(p => p.trim()).filter(Boolean) : [
+
+    // Combine uploaded photos + URL entered photos
+    const urlPhotos = memPhotos ? memPhotos.split(',').map(p => p.trim()).filter(Boolean) : [];
+    const allPhotos = [...uploadedPhotos, ...urlPhotos];
+    const finalPhotos = allPhotos.length > 0 ? allPhotos : [
       'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800&auto=format&fit=crop&q=80'
     ];
+
     addMemory({
       title: memTitle,
       description: memDesc,
       date: memDate,
       location: memLocation || undefined,
-      photos: photosArray,
+      photos: finalPhotos,
       people: memPeople ? memPeople.split(',').map(p => p.trim()).filter(Boolean) : [],
       tags: ['Xusuus'],
       isFavorite: false
@@ -138,19 +193,19 @@ export const AddModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-[#ece9df] overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-[#ece9df] overflow-hidden flex flex-col max-h-[90vh] modal-enter">
         {/* Modal Top Bar */}
         <div className="p-5 px-6 border-b border-[#ece9df] flex items-center justify-between bg-[#fcfaf2]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#0e382b] flex items-center justify-center text-white">
+            <div className="w-8 h-8 rounded-full bg-[#0e382b] flex items-center justify-center text-white shadow-2xs">
               <span className="font-bold text-sm">+</span>
             </div>
             <h3 className="font-bold text-[18px] text-[#1a202c]">Ku dar Shay Cusub</h3>
           </div>
           <button
             onClick={closeAddModal}
-            className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors"
+            className="p-1.5 rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-200 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -171,7 +226,7 @@ export const AddModal: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`py-3.5 px-4 font-semibold text-[13px] flex items-center gap-2 border-b-2 transition-all whitespace-nowrap ${
+                className={`py-3.5 px-4 font-semibold text-[13px] flex items-center gap-2 border-b-2 transition-all whitespace-nowrap cursor-pointer ${
                   isActive
                     ? 'border-[#0e382b] text-[#0e382b]'
                     : 'border-transparent text-[#718096] hover:text-[#1a202c]'
@@ -188,7 +243,7 @@ export const AddModal: React.FC = () => {
         <div className="p-6 overflow-y-auto flex-1 space-y-4">
           {/* Document Form */}
           {activeTab === 'document' && (
-            <form onSubmit={handleDocumentSubmit} className="space-y-4">
+            <form onSubmit={handleDocumentSubmit} className="space-y-4 view-enter">
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1">Magaca Dukumiintiga *</label>
                 <input
@@ -196,8 +251,34 @@ export const AddModal: React.FC = () => {
                   value={docTitle}
                   onChange={(e) => setDocTitle(e.target.value)}
                   placeholder="Tusaale: Heshiiska Kirada Guriga"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none focus:ring-2 focus:ring-[#0e382b]/30"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
+                />
+              </div>
+
+              {/* Logical File Attachment Dropzone */}
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-700 mb-1">Dukumiinti Fayl (PDF, Word, Doc)</label>
+                <div 
+                  onClick={() => docFileRef.current?.click()}
+                  className="border-2 border-dashed border-[#ece9df] hover:border-[#0e382b]/40 rounded-2xl p-4 text-center cursor-pointer bg-[#fbf9f0] hover:bg-white transition-all group"
+                >
+                  <Upload className="w-6 h-6 text-[#718096] group-hover:text-[#0e382b] mx-auto mb-1.5 transition-colors" />
+                  <p className="text-[13px] font-medium text-[#1a202c]">
+                    {docFileName ? (
+                      <span className="text-[#0e382b] font-bold">✓ {docFileName} ({(docFileSize / 1024).toFixed(0)} KB)</span>
+                    ) : (
+                      <span>Guji si aad u soo geliso faylka dukumiintiga</span>
+                    )}
+                  </p>
+                  <p className="text-[11px] text-[#718096] mt-0.5">PDF, DOC, DOCX ilaa 10MB</p>
+                </div>
+                <input
+                  ref={docFileRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleDocFileUpload}
+                  className="hidden"
                 />
               </div>
 
@@ -207,7 +288,7 @@ export const AddModal: React.FC = () => {
                   <select
                     value={docCategory}
                     onChange={(e) => setDocCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   >
                     <option value="Heshiisyo">Heshiisyo</option>
                     <option value="Waxbarasho">Waxbarasho</option>
@@ -223,7 +304,7 @@ export const AddModal: React.FC = () => {
                     value={docTags}
                     onChange={(e) => setDocTags(e.target.value)}
                     placeholder="guri, kirro, muqdisho"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   />
                 </div>
               </div>
@@ -235,7 +316,7 @@ export const AddModal: React.FC = () => {
                   onChange={(e) => setDocSummary(e.target.value)}
                   rows={3}
                   placeholder="Faahfaahin kooban oo ku saabsan dukumiintiga..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                 />
               </div>
 
@@ -243,13 +324,13 @@ export const AddModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold cursor-pointer btn-press"
                 >
                   Jooji
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21]"
+                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21] shadow-sm cursor-pointer btn-press"
                 >
                   Kaydi Dukumiintiga
                 </button>
@@ -259,7 +340,7 @@ export const AddModal: React.FC = () => {
 
           {/* Note Form */}
           {activeTab === 'note' && (
-            <form onSubmit={handleNoteSubmit} className="space-y-4">
+            <form onSubmit={handleNoteSubmit} className="space-y-4 view-enter">
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1">Cinwaanka Qoraalka *</label>
                 <input
@@ -267,7 +348,7 @@ export const AddModal: React.FC = () => {
                   value={noteTitle}
                   onChange={(e) => setNoteTitle(e.target.value)}
                   placeholder="Tusaale: Qorshaha Maanta"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none focus:ring-2 focus:ring-[#0e382b]/30"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
               </div>
@@ -278,7 +359,7 @@ export const AddModal: React.FC = () => {
                   <select
                     value={noteCategory}
                     onChange={(e) => setNoteCategory(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   >
                     <option value="Shaqo">Shaqo</option>
                     <option value="Shakhsi">Shakhsi</option>
@@ -291,7 +372,7 @@ export const AddModal: React.FC = () => {
                   <select
                     value={noteColor}
                     onChange={(e) => setNoteColor(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   >
                     <option value="#FFFFFF">Caddaan (Default)</option>
                     <option value="#F0FDF4">Cagaar khafiif ah</option>
@@ -309,7 +390,7 @@ export const AddModal: React.FC = () => {
                   onChange={(e) => setNoteContent(e.target.value)}
                   rows={5}
                   placeholder="Qor qoraalkaaga halkan..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
               </div>
@@ -318,13 +399,13 @@ export const AddModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold cursor-pointer btn-press"
                 >
                   Jooji
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21]"
+                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21] shadow-sm cursor-pointer btn-press"
                 >
                   Kaydi Qoraalka
                 </button>
@@ -332,9 +413,9 @@ export const AddModal: React.FC = () => {
             </form>
           )}
 
-          {/* Memory Form */}
+          {/* Memory Form with Photo Upload & Preview */}
           {activeTab === 'memory' && (
-            <form onSubmit={handleMemorySubmit} className="space-y-4">
+            <form onSubmit={handleMemorySubmit} className="space-y-4 view-enter">
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1">Cinwaanka Xusuusta *</label>
                 <input
@@ -342,9 +423,59 @@ export const AddModal: React.FC = () => {
                   value={memTitle}
                   onChange={(e) => setMemTitle(e.target.value)}
                   placeholder="Tusaale: Safarkii Xeebta Liido"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none focus:ring-2 focus:ring-[#0e382b]/30"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
+              </div>
+
+              {/* Photo Upload & Preview Container */}
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-700 mb-1">Sawirrada Xusuusta (Upload ama URL)</label>
+                
+                {imageError && (
+                  <div className="mb-2 p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-center gap-2 animate-shake">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{imageError}</span>
+                  </div>
+                )}
+
+                {/* Upload Button Box */}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => memPhotoInputRef.current?.click()}
+                    className="flex-1 border-2 border-dashed border-[#ece9df] hover:border-[#0e382b]/40 rounded-2xl p-3 text-center cursor-pointer bg-[#fbf9f0] hover:bg-white transition-all flex items-center justify-center gap-2 text-[13px] font-semibold text-[#0e382b] group"
+                  >
+                    <Camera className="w-4.5 h-4.5 text-[#0e382b] transition-transform duration-200 group-hover:scale-110" />
+                    <span>Dooro Sawir Kumbuyuutarkaaga / Taleefankaaga</span>
+                  </button>
+                  <input
+                    ref={memPhotoInputRef}
+                    type="file"
+                    multiple
+                    accept="image/png, image/jpeg, image/jpg, image/webp"
+                    onChange={handleMemoryPhotoUpload}
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Photo Previews */}
+                {uploadedPhotos.length > 0 && (
+                  <div className="flex flex-wrap gap-2.5 mt-2.5 pt-2 border-t border-[#f0ede0]">
+                    {uploadedPhotos.map((img, idx) => (
+                      <div key={idx} className="relative w-16 h-16 rounded-xl overflow-hidden border border-[#ece9df] shadow-2xs group">
+                        <img src={img} alt={`Uploaded ${idx}`} className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setUploadedPhotos(prev => prev.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white flex items-center justify-center text-[10px] hover:bg-rose-600 transition-colors"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -354,7 +485,7 @@ export const AddModal: React.FC = () => {
                     type="date"
                     value={memDate}
                     onChange={(e) => setMemDate(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   />
                 </div>
                 <div>
@@ -364,7 +495,7 @@ export const AddModal: React.FC = () => {
                     value={memLocation}
                     onChange={(e) => setMemLocation(e.target.value)}
                     placeholder="Muqdisho, Soomaaliya"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   />
                 </div>
               </div>
@@ -376,18 +507,7 @@ export const AddModal: React.FC = () => {
                   value={memPeople}
                   onChange={(e) => setMemPeople(e.target.value)}
                   placeholder="Cumar, Khaalid, Farxaan"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[13px] font-semibold text-gray-700 mb-1">Sawir URL (ama faasilo u dhaxaysii)</label>
-                <input
-                  type="text"
-                  value={memPhotos}
-                  onChange={(e) => setMemPhotos(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                 />
               </div>
 
@@ -398,7 +518,7 @@ export const AddModal: React.FC = () => {
                   onChange={(e) => setMemDesc(e.target.value)}
                   rows={4}
                   placeholder="Maxaa dhacay maalintaas? Maxaad xasuusataa?"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
               </div>
@@ -407,13 +527,13 @@ export const AddModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold cursor-pointer btn-press"
                 >
                   Jooji
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21]"
+                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21] shadow-sm cursor-pointer btn-press"
                 >
                   Kaydi Xusuusta
                 </button>
@@ -423,7 +543,7 @@ export const AddModal: React.FC = () => {
 
           {/* Reminder Form */}
           {activeTab === 'reminder' && (
-            <form onSubmit={handleReminderSubmit} className="space-y-4">
+            <form onSubmit={handleReminderSubmit} className="space-y-4 view-enter">
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1">Maxaa la xasuusinayaa? *</label>
                 <input
@@ -431,7 +551,7 @@ export const AddModal: React.FC = () => {
                   value={remTitle}
                   onChange={(e) => setRemTitle(e.target.value)}
                   placeholder="Tusaale: Bixi Biilka Korontada"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none focus:ring-2 focus:ring-[#0e382b]/30"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
               </div>
@@ -443,7 +563,7 @@ export const AddModal: React.FC = () => {
                     type="date"
                     value={remDate}
                     onChange={(e) => setRemDate(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                     required
                   />
                 </div>
@@ -453,7 +573,7 @@ export const AddModal: React.FC = () => {
                     type="time"
                     value={remTime}
                     onChange={(e) => setRemTime(e.target.value)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                     required
                   />
                 </div>
@@ -465,7 +585,7 @@ export const AddModal: React.FC = () => {
                   <select
                     value={remPriority}
                     onChange={(e) => setRemPriority(e.target.value as any)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   >
                     <option value="sare">Sare (High)</option>
                     <option value="dhexe">Dhexe (Medium)</option>
@@ -477,7 +597,7 @@ export const AddModal: React.FC = () => {
                   <select
                     value={remRepeat}
                     onChange={(e) => setRemRepeat(e.target.value as any)}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   >
                     <option value="none">Ma laha (Keliya mar)</option>
                     <option value="daily">Maalin kasta</option>
@@ -494,7 +614,7 @@ export const AddModal: React.FC = () => {
                   onChange={(e) => setRemDesc(e.target.value)}
                   rows={2}
                   placeholder="Xog dheeraad ah..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                 />
               </div>
 
@@ -502,13 +622,13 @@ export const AddModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold cursor-pointer btn-press"
                 >
                   Jooji
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21]"
+                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21] shadow-sm cursor-pointer btn-press"
                 >
                   Kaydi Xasuusiyaha
                 </button>
@@ -518,7 +638,7 @@ export const AddModal: React.FC = () => {
 
           {/* Voice Form */}
           {activeTab === 'voice' && (
-            <form onSubmit={handleVoiceSubmit} className="space-y-4">
+            <form onSubmit={handleVoiceSubmit} className="space-y-4 view-enter">
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-1">Magaca Codka *</label>
                 <input
@@ -526,7 +646,7 @@ export const AddModal: React.FC = () => {
                   value={voiceTitle}
                   onChange={(e) => setVoiceTitle(e.target.value)}
                   placeholder="Tusaale: Fikrad ku saabsan mashruuca cusub"
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none focus:ring-2 focus:ring-[#0e382b]/30"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                   required
                 />
               </div>
@@ -538,7 +658,7 @@ export const AddModal: React.FC = () => {
                   onChange={(e) => setVoiceTranscript(e.target.value)}
                   rows={4}
                   placeholder="Qor waxa ku jira codka..."
-                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] text-[13.5px] outline-none"
+                  className="w-full px-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] outline-none input-premium font-medium"
                 />
               </div>
 
@@ -546,13 +666,13 @@ export const AddModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeAddModal}
-                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold"
+                  className="px-4 py-2 rounded-xl border border-gray-300 text-gray-700 text-[13px] font-semibold cursor-pointer btn-press"
                 >
                   Jooji
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21]"
+                  className="px-5 py-2 rounded-xl bg-[#0e382b] text-white text-[13px] font-semibold hover:bg-[#092b21] shadow-sm cursor-pointer btn-press"
                 >
                   Kaydi Codka
                 </button>

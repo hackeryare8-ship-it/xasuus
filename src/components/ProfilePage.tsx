@@ -177,28 +177,36 @@ export const ProfilePage: React.FC = () => {
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#ece9df] shadow-xs space-y-6 card-subtle">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 pb-6 border-b border-[#f0ede0]">
           <div className="flex items-center gap-5">
-            {/* Avatar with Camera Action Overlay */}
-            <div className="relative group">
-              <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full overflow-hidden border-4 border-[#def7ee] shadow-sm bg-[#def7ee] flex items-center justify-center transition-transform duration-200 group-hover:scale-[1.02]">
+            {/* Avatar with Interactive Camera Action Overlay */}
+            <div className="relative group cursor-pointer" onClick={handleTriggerFileInput}>
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-4 border-[#def7ee] shadow-sm bg-[#def7ee] flex items-center justify-center transition-all duration-300 group-hover:border-[#c7f1e2] relative">
                 {currentUser.avatar ? (
                   <img 
                     src={currentUser.avatar} 
                     alt={currentUser.name} 
                     onError={(e) => {
-                      // Fallback on image load error
                       (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'User')}`;
                     }}
-                    className="w-full h-full object-cover transition-opacity duration-300"
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   />
                 ) : (
                   <User className="w-10 h-10 text-[#0e382b]" />
                 )}
+
+                {/* Cinematic Hover Overlay */}
+                <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity duration-250 flex flex-col items-center justify-center text-white gap-1">
+                  <Camera className="w-5 h-5 text-white" />
+                  <span className="text-[10px] font-bold tracking-tight text-white">Bedel sawirka</span>
+                </div>
               </div>
 
               {/* Camera Icon Trigger Badge */}
               <button
                 type="button"
-                onClick={handleTriggerFileInput}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleTriggerFileInput();
+                }}
                 title="Bedel sawirka profile-ka"
                 className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-[#0e382b] hover:bg-[#092b21] text-white border-2 border-white flex items-center justify-center shadow-md transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer"
               >
@@ -228,7 +236,7 @@ export const ProfilePage: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             <button
               type="button"
               onClick={handleTriggerFileInput}
@@ -237,6 +245,22 @@ export const ProfilePage: React.FC = () => {
               <Camera className="w-4 h-4" />
               <span>Bedel sawirka</span>
             </button>
+
+            {currentUser.avatar && (
+              <button
+                type="button"
+                onClick={() => {
+                  updateProfile({ avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(currentUser.name || 'User')}` });
+                  setPhotoSuccess('Sawirka profile-ka waa la tirtiray.');
+                  setTimeout(() => setPhotoSuccess(null), 3000);
+                }}
+                className="px-3 py-2 rounded-xl border border-[#ece9df] bg-white hover:bg-rose-50 text-[13px] font-semibold text-rose-600 flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer btn-press"
+                title="Ka saar sawirka gaarka ah"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>Ka saar</span>
+              </button>
+            )}
 
             <button
               type="button"
