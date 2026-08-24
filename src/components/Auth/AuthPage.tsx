@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Zap, 
-  Mail, 
-  Lock, 
-  User, 
-  ArrowRight, 
-  Eye, 
-  EyeOff, 
-  AlertCircle, 
-  CheckCircle2, 
-  RefreshCw, 
-  KeyRound, 
-  ShieldCheck, 
+import {
+  Zap,
+  Mail,
+  Lock,
+  User,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw,
+  KeyRound,
+  ShieldCheck,
   LogIn,
   UserPlus,
   ArrowLeft,
@@ -25,28 +25,28 @@ import { useAuth } from '../../context/AuthContext';
 import { UserProfile } from '../../types';
 import { AuthSession } from '../../services/authService';
 
-type AuthView = 
+type AuthView =
   | 'choice'
-  | 'login' 
-  | 'register' 
+  | 'login'
+  | 'register'
   | 'create-recovery-key'
-  | 'forgot-password' 
-  | 'verify-code' 
-  | 'new-password' 
+  | 'forgot-password'
+  | 'verify-code'
+  | 'new-password'
   | 'reset-success'
   | 'welcome-new-user'
   | 'welcome-back';
 
 export const AuthPage: React.FC = () => {
-  const { 
-    login, 
-    register, 
-    sendResetCode, 
-    verifyResetCode, 
+  const {
+    login,
+    register,
+    sendResetCode,
+    verifyResetCode,
     resetPassword,
     verifyRecoveryKey,
     resetPasswordWithRecoveryKey,
-    activateSession 
+    activateSession
   } = useAuth();
 
   // The initial experience defaults to 'choice'
@@ -220,7 +220,7 @@ export const AuthPage: React.FC = () => {
     const clean = key.trim();
     if (clean.length === 0) return { label: '', color: '', bg: '', width: '0%' };
     if (clean.length < 4) return { label: 'Daciif', color: 'text-rose-600', bg: 'bg-rose-500', width: '33%' };
-    
+
     const hasLetters = /[A-Za-z]/.test(clean);
     const hasNumbers = /[0-9]/.test(clean);
 
@@ -873,8 +873,8 @@ export const AuthPage: React.FC = () => {
             </form>
           </div>
         )}
-          </div>
-        )}
+
+        {/* ======================================================== */}
 
         {/* ======================================================== */}
         {/* VIEW 4: VERIFY EMAIL PASSWORD RESET CODE */}
