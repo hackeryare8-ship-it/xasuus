@@ -15,7 +15,11 @@ import {
   LogIn,
   UserPlus,
   ArrowLeft,
-  Sparkles
+  Sparkles,
+  Check,
+  ShieldAlert,
+  Key,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { UserProfile } from '../../types';
@@ -25,6 +29,7 @@ type AuthView =
   | 'choice'
   | 'login' 
   | 'register' 
+  | 'create-recovery-key'
   | 'forgot-password' 
   | 'verify-code' 
   | 'new-password' 
@@ -39,11 +44,14 @@ export const AuthPage: React.FC = () => {
     sendResetCode, 
     verifyResetCode, 
     resetPassword,
+    verifyRecoveryKey,
+    resetPasswordWithRecoveryKey,
     activateSession 
   } = useAuth();
 
   // The initial experience defaults to 'choice'
   const [view, setView] = useState<AuthView>('choice');
+  const [choiceSelection, setChoiceSelection] = useState<'existing' | 'new' | null>(null);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -52,11 +60,20 @@ export const AuthPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
+  // User-Created Recovery Key State (Parts 2-4)
+  const [userRecoveryKey, setUserRecoveryKey] = useState('');
+  const [confirmUserRecoveryKey, setConfirmUserRecoveryKey] = useState('');
+
+  // Password Recovery Fields
+  const [inputRecoveryKey, setInputRecoveryKey] = useState('');
+  const [recoveryMethod, setRecoveryMethod] = useState<'key' | 'email'>('key'); // Default primary is Recovery Key (Part 1 & 7)
+  const [isRecoveryKeyVerified, setIsRecoveryKeyVerified] = useState(false);
+
   // Authenticated User for Welcome Animations
   const [authenticatedUser, setAuthenticatedUser] = useState<UserProfile | null>(null);
   const [pendingSession, setPendingSession] = useState<AuthSession | null>(null);
 
-  // Verification Code (6 digits)
+  // Verification Code (6 digits for Email recovery)
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
   const [cooldown, setCooldown] = useState(0);
 
@@ -83,7 +100,7 @@ export const AuthPage: React.FC = () => {
     if ((view === 'welcome-back' || view === 'welcome-new-user') && pendingSession) {
       const timer = setTimeout(() => {
         activateSession(pendingSession);
-      }, 1200);
+      }, 1300);
       return () => clearTimeout(timer);
     }
   }, [view, pendingSession, activateSession]);
@@ -96,7 +113,22 @@ export const AuthPage: React.FC = () => {
   // Switch Views cleanly
   const navigateTo = (newView: AuthView) => {
     clearErrors();
+    setChoiceSelection(null);
     setView(newView);
+  };
+
+  // Handle Choice Selection with small animated welcome message (Part 15)
+  const handleChoiceClick = (choice: 'existing' | 'new') => {
+    setChoiceSelection(choice);
+    clearErrors();
+    setTimeout(() => {
+      if (choice === 'existing') {
+        setView('login');
+      } else {
+        setView('register');
+      }
+      setChoiceSelection(null);
+    }, 400);
   };
 
   // 1. Handle Login (Real Public Authentication)
@@ -122,8 +154,8 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // 2. Handle Public Sign Up (Supports all providers: Gmail, Outlook, Yahoo, iCloud, Proton, etc.)
-  const handleRegister = async (e: React.FormEvent) => {
+  // 2. Step 1 of Public Sign Up: Validate basic info, then transition to Recovery Key step (Part 2)
+  const handleRegisterStepOne = (e: React.FormEvent) => {
     e.preventDefault();
     clearErrors();
     const cleanName = name.trim();
@@ -144,20 +176,63 @@ export const AuthPage: React.FC = () => {
       return;
     }
 
+    // Transition to dedicated Recovery Key Creation Step
+    setUserRecoveryKey('');
+    setConfirmUserRecoveryKey('');
+    setView('create-recovery-key');
+  };
+
+  // 3. Step 2 of Public Sign Up: Save User-Created Recovery Key & Register (Parts 3-5)
+  const handleSaveUserRecoveryKey = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearErrors();
+    const cleanKey = userRecoveryKey.trim().toUpperCase();
+    const cleanConfirm = confirmUserRecoveryKey.trim().toUpperCase();
+
+    if (cleanKey.length < 4 || cleanKey.length > 6) {
+      setErrorMessage('Furaha soo-kabashada waa inuu ka koobnaadaa 4 ilaa 6 xaraf ama lambar.');
+      return;
+    }
+
+    if (cleanKey !== cleanConfirm) {
+      setErrorMessage('Furayaasha waa inay isku mid noqdaan.');
+      return;
+    }
+
     setIsSubmitting(true);
-    const res = await register(cleanName, cleanEmail, password);
+    const res = await register(name.trim(), email.trim(), password, cleanKey);
     setIsSubmitting(false);
 
     if (res.success && res.session && res.user) {
       setAuthenticatedUser(res.user);
       setPendingSession(res.session);
+      // Clean up sensitive plaintext key from state
+      setUserRecoveryKey('');
+      setConfirmUserRecoveryKey('');
       setView('welcome-new-user');
     } else {
       setErrorMessage(res.error || 'Khalad ayaa dhacay. Fadlan mar kale isku day.');
     }
   };
 
-  // 3. Handle Send Reset Code
+  // Key Strength Calculator (Part 3)
+  const getKeyStrength = (key: string): { label: string; color: string; bg: string; width: string } => {
+    const clean = key.trim();
+    if (clean.length === 0) return { label: '', color: '', bg: '', width: '0%' };
+    if (clean.length < 4) return { label: 'Daciif', color: 'text-rose-600', bg: 'bg-rose-500', width: '33%' };
+    
+    const hasLetters = /[A-Za-z]/.test(clean);
+    const hasNumbers = /[0-9]/.test(clean);
+
+    if (clean.length >= 5 && hasLetters && hasNumbers) {
+      return { label: 'Xooggan', color: 'text-emerald-700', bg: 'bg-emerald-500', width: '100%' };
+    }
+    return { label: 'Dhexdhexaad', color: 'text-amber-700', bg: 'bg-amber-500', width: '66%' };
+  };
+
+  const keyStrength = getKeyStrength(userRecoveryKey);
+
+  // 4. Handle Send Reset Code (Email Recovery Flow)
   const handleSendResetCode = async (e: React.FormEvent) => {
     e.preventDefault();
     clearErrors();
@@ -174,6 +249,7 @@ export const AuthPage: React.FC = () => {
     if (res.success) {
       setCooldown(60);
       setCodeDigits(['', '', '', '', '', '']);
+      setIsRecoveryKeyVerified(false);
       setView('verify-code');
       setSuccessMessage(`Haddii email-kan uu diiwaangashan yahay, waxaa loo soo diray code.`);
     } else {
@@ -181,7 +257,34 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // 4. Digit Input Handlers
+  // 5. Handle Recovery Key Verification (Parts 7-9)
+  const handleVerifyRecoveryKeySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    clearErrors();
+    const cleanEmail = email.trim();
+    const cleanKey = inputRecoveryKey.trim().toUpperCase();
+
+    if (!cleanEmail || !cleanKey) {
+      setErrorMessage('Fadlan geli email-kaaga iyo Recovery Key-gaaga.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    const res = await verifyRecoveryKey(cleanEmail, cleanKey);
+    setIsSubmitting(false);
+
+    if (res.success) {
+      setIsRecoveryKeyVerified(true);
+      setSuccessMessage('Xogta waa la xaqiijiyay.');
+      setTimeout(() => {
+        setView('new-password');
+      }, 450);
+    } else {
+      setErrorMessage(res.error || 'Xogta soo kabashada lama xaqiijin karin.');
+    }
+  };
+
+  // 6. Digit Input Handlers for Email OTP
   const handleDigitChange = (index: number, value: string) => {
     if (value.length > 1) {
       value = value.slice(-1);
@@ -202,7 +305,7 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // 5. Handle Verify Reset Code
+  // 7. Handle Verify Email Reset Code
   const handleVerifyResetCodeSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     clearErrors();
@@ -214,6 +317,7 @@ export const AuthPage: React.FC = () => {
 
     const res = verifyResetCode(email, enteredCode);
     if (res.success) {
+      setIsRecoveryKeyVerified(false);
       setView('new-password');
     } else {
       setErrorMessage(res.error || 'Code-ka waa khaldan yahay.');
@@ -235,7 +339,7 @@ export const AuthPage: React.FC = () => {
     }
   };
 
-  // 6. Handle Reset New Password
+  // 8. Handle Save New Password (Part 10)
   const handleSaveNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     clearErrors();
@@ -249,12 +353,19 @@ export const AuthPage: React.FC = () => {
     }
 
     setIsSubmitting(true);
-    const res = await resetPassword(email, codeDigits.join(''), password);
+    let res: { success: boolean; error?: string };
+
+    if (isRecoveryKeyVerified) {
+      res = await resetPasswordWithRecoveryKey(email, inputRecoveryKey.trim().toUpperCase(), password);
+    } else {
+      res = await resetPassword(email, codeDigits.join(''), password);
+    }
     setIsSubmitting(false);
 
     if (res.success) {
       setPassword('');
       setConfirmPassword('');
+      setInputRecoveryKey('');
       setView('reset-success');
     } else {
       setErrorMessage(res.error || 'Password-ka lama cusbooneysiin karin.');
@@ -271,7 +382,7 @@ export const AuthPage: React.FC = () => {
 
       {/* Main Card Container */}
       <div className="w-full max-w-md bg-white rounded-3xl p-8 sm:p-10 shadow-xl border border-[#ece9df] relative z-10 animate-fade-scale">
-        {/* Brand Logo Header */}
+        {/* Brand Logo Header (Sequence 1) */}
         <div className="flex flex-col items-center text-center mb-6">
           <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#def7ee] to-[#c7f1e2] flex items-center justify-center text-[#0e382b] shadow-sm mb-3.5 animate-fade-scale">
             <Zap className="w-6.5 h-6.5 fill-[#0e382b] text-[#0e382b]" />
@@ -296,22 +407,29 @@ export const AuthPage: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 0: FIRST WELCOME CHOICE SCREEN (POLISHED & ELEGANT) */}
+        {/* VIEW 0: FIRST WELCOME CHOICE SCREEN (PARTS 13-15) */}
         {/* ======================================================== */}
         {view === 'choice' && (
           <div className="space-y-6 view-enter">
             <div className="text-center space-y-1.5 animate-stagger-2">
-              <h2 className="text-[20px] font-bold text-[#1a202c]">Ku soo dhawoow Xasuus</h2>
+              <h2 className="text-[20px] font-bold text-[#1a202c]">Soo dhowow Xasuus</h2>
               <p className="text-[13.5px] text-[#718096] font-medium">
-                Ma hore ayaad isku diiwaangelisay?
+                Ma hore ayaad isku diiwaangelisay mise waa markii kuugu horreysay?
               </p>
             </div>
+
+            {/* Selection Response Notification Card (Part 15) */}
+            {choiceSelection && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-[#0e382b] text-[13.5px] font-semibold text-center animate-in fade-in zoom-in-95 duration-200 shadow-2xs">
+                {choiceSelection === 'existing' ? 'Ku soo dhowow mar kale.' : 'Ku soo dhowow Xasuus.'}
+              </div>
+            )}
 
             <div className="space-y-3.5 pt-1">
               {/* Option 1: Existing User */}
               <button
                 type="button"
-                onClick={() => navigateTo('login')}
+                onClick={() => handleChoiceClick('existing')}
                 className="w-full p-4 rounded-2xl border border-[#ece9df] bg-[#fbf9f0] auth-choice-card text-left flex items-center justify-between group cursor-pointer animate-stagger-3"
               >
                 <div className="flex items-center gap-3.5">
@@ -333,7 +451,7 @@ export const AuthPage: React.FC = () => {
               {/* Option 2: New User */}
               <button
                 type="button"
-                onClick={() => navigateTo('register')}
+                onClick={() => handleChoiceClick('new')}
                 className="w-full p-4 rounded-2xl border border-[#ece9df] bg-[#fbf9f0] auth-choice-card text-left flex items-center justify-between group cursor-pointer animate-stagger-4"
               >
                 <div className="flex items-center gap-3.5">
@@ -454,10 +572,10 @@ export const AuthPage: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 2: REGISTER (OPTION 2 — NEW USER) */}
+        {/* VIEW 2: REGISTER STEP 1 (NEW USER BASIC INFO) */}
         {/* ======================================================== */}
         {view === 'register' && (
-          <form onSubmit={handleRegister} className="space-y-4 view-enter">
+          <form onSubmit={handleRegisterStepOne} className="space-y-4 view-enter">
             <div className="flex items-center justify-between mb-1">
               <button
                 type="button"
@@ -543,20 +661,10 @@ export const AuthPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] disabled:opacity-50 text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press mt-2 cursor-pointer"
+              className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press mt-2 cursor-pointer"
             >
-              {isSubmitting ? (
-                <div className="flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
-                  <span>Abuurista koontada...</span>
-                </div>
-              ) : (
-                <>
-                  <span>Samee Account</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              <span>Sii wad (Samee Recovery Key)</span>
+              <ArrowRight className="w-4 h-4" />
             </button>
 
             <div className="text-center pt-2">
@@ -573,65 +681,203 @@ export const AuthPage: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 3: FORGOT PASSWORD */}
+        {/* VIEW 2.5: USER CREATES THEIR OWN RECOVERY KEY (PARTS 2-4) */}
         {/* ======================================================== */}
-        {view === 'forgot-password' && (
-          <form onSubmit={handleSendResetCode} className="space-y-4 view-enter">
-            <div className="text-center mb-5">
-              <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-[#0e382b] flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
-                <KeyRound className="w-5 h-5" />
-              </div>
-              <h2 className="text-[19px] font-bold text-[#1a202c]">Password-ka dib u samee</h2>
-              <p className="text-[13px] text-[#718096] mt-0.5">Geli email-kaaga si aan kuugu soo dirno code-ka xaqiijinta</p>
+        {view === 'create-recovery-key' && (
+          <form onSubmit={handleSaveUserRecoveryKey} className="space-y-4 view-enter">
+            <div className="flex items-center justify-between mb-1">
+              <button
+                type="button"
+                onClick={() => setView('register')}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#718096] hover:text-[#1a202c] cursor-pointer group transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+                <span>Dib ugu noqo xogtaada</span>
+              </button>
             </div>
 
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-[#0e382b] flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
+                <Key className="w-6 h-6 text-[#0e382b]" />
+              </div>
+              <h2 className="text-[19px] font-bold text-[#1a202c]">Samee Furaha Soo-kabashada</h2>
+              <p className="text-[13px] text-[#718096] mt-1 leading-relaxed">
+                Furahan ayaa kaa caawinaya inaad dib ugu soo laabato Xasuus haddii aad illowdo password-kaaga.
+              </p>
+            </div>
+
+            {/* Input 1: Recovery Key */}
             <div>
-              <label className="block text-[13px] font-semibold text-[#2d3748] mb-1">Email</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[13px] font-semibold text-[#2d3748]">
+                  Recovery Key (4–6 xaraf ama lambar)
+                </label>
+                {keyStrength.label && (
+                  <span className={`text-[11px] font-bold ${keyStrength.color}`}>
+                    {keyStrength.label}
+                  </span>
+                )}
+              </div>
               <div className="relative flex items-center">
-                <Mail className="w-4 h-4 text-[#718096] absolute left-3.5 pointer-events-none" />
+                <Key className="w-4 h-4 text-[#718096] absolute left-3.5 pointer-events-none" />
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tusaale@outlook.com ama gmail.com"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] text-[#1a202c] outline-none input-premium font-medium"
+                  type="text"
+                  value={userRecoveryKey}
+                  onChange={(e) => setUserRecoveryKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  placeholder="Tusaale: X7K4 ama 82F91"
+                  maxLength={6}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[15px] font-mono font-bold tracking-widest uppercase text-[#0e382b] outline-none input-premium"
+                  required
+                />
+              </div>
+              {/* Subtle Strength Bar Indicator (Part 3) */}
+              {userRecoveryKey.length > 0 && (
+                <div className="w-full h-1 bg-gray-100 rounded-full mt-1.5 overflow-hidden">
+                  <div className={`h-full transition-all duration-300 ${keyStrength.bg}`} style={{ width: keyStrength.width }} />
+                </div>
+              )}
+            </div>
+
+            {/* Input 2: Confirm Recovery Key (Part 4) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[13px] font-semibold text-[#2d3748]">
+                  Xaqiiji Recovery Key
+                </label>
+                {confirmUserRecoveryKey.length >= 4 && userRecoveryKey === confirmUserRecoveryKey && (
+                  <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Isku mid
+                  </span>
+                )}
+              </div>
+              <div className="relative flex items-center">
+                <Shield className="w-4 h-4 text-[#718096] absolute left-3.5 pointer-events-none" />
+                <input
+                  type="text"
+                  value={confirmUserRecoveryKey}
+                  onChange={(e) => setConfirmUserRecoveryKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                  placeholder="Ku celi furahaaga"
+                  maxLength={6}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[15px] font-mono font-bold tracking-widest uppercase text-[#0e382b] outline-none input-premium"
                   required
                 />
               </div>
             </div>
 
+            {/* Security Notice (Part 5) */}
+            <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-[11.5px] flex items-start gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+              <span className="leading-snug">
+                Furahan waa sirtada gaarka ah. Meel ammaan ah ku qoro. Dib looma arki karo haddii la kaydiyo.
+              </span>
+            </div>
+
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] disabled:opacity-50 text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press mt-2 cursor-pointer"
+              disabled={isSubmitting || userRecoveryKey.length < 4 || confirmUserRecoveryKey.length < 4}
+              className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] disabled:opacity-50 text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press cursor-pointer"
             >
               {isSubmitting ? (
                 <div className="flex items-center gap-2">
                   <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
-                  <span>Diraya Code-ka...</span>
+                  <span>Kaydinaya furaha & samaynaya akoonka...</span>
                 </div>
               ) : (
                 <>
-                  <span>U dir Code</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Kaydi Furaha & Dhammee</span>
+                  <CheckCircle2 className="w-4 h-4" />
                 </>
               )}
             </button>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => navigateTo('login')}
-                className="text-[13px] font-semibold text-[#718096] hover:text-[#1a202c] cursor-pointer transition-colors"
-              >
-                ← Ku noqo Login
-              </button>
-            </div>
           </form>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 4: VERIFY PASSWORD RESET CODE */}
+        {/* VIEW 3: FORGOT PASSWORD — SINGLE RECOVERY (GMAIL + RECOVERY KEY) */}
+        {/* ======================================================== */}
+        {view === 'forgot-password' && (
+          <div className="space-y-5 view-enter">
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => navigateTo('login')}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#718096] hover:text-[#1a202c] cursor-pointer group transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" />
+                <span>Ku noqo Login</span>
+              </button>
+            </div>
+
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-[#0e382b] flex items-center justify-center mx-auto mb-2.5 shadow-2xs">
+                <KeyRound className="w-6 h-6 text-[#0e382b]" />
+              </div>
+              <h2 className="text-[20px] font-bold text-[#1a202c]">Xogtaada xaqiiji</h2>
+              <p className="text-[13px] text-[#718096] mt-0.5">
+                Geli Gmail-kaaga iyo Recovery Key-gaaga si aad u hesho akoonkaaga
+              </p>
+            </div>
+
+            {/* Single Streamlined Recovery Form: Gmail + Recovery Key */}
+            <form onSubmit={handleVerifyRecoveryKeySubmit} className="space-y-4 pt-1">
+              <div>
+                <label className="block text-[13px] font-semibold text-[#2d3748] mb-1">Gmail / Email</label>
+                <div className="relative flex items-center">
+                  <Mail className="w-4 h-4 text-[#718096] absolute left-3.5 pointer-events-none" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="magacaaga@gmail.com"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[13.5px] text-[#1a202c] outline-none input-premium font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[13px] font-semibold text-[#2d3748] mb-1">
+                  Recovery Key (4–6 xaraf ama lambar)
+                </label>
+                <div className="relative flex items-center">
+                  <Key className="w-4 h-4 text-[#718096] absolute left-3.5 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={inputRecoveryKey}
+                    onChange={(e) => setInputRecoveryKey(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="Tusaale: X7K4 ama 82F91"
+                    maxLength={6}
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#ece9df] bg-[#fbf9f0] text-[15px] font-mono font-bold tracking-widest uppercase text-[#0e382b] outline-none input-premium"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] disabled:opacity-50 text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press cursor-pointer mt-2"
+              >
+                {isSubmitting ? (
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin text-emerald-200" />
+                    <span>Xaqiijinaya xogta...</span>
+                  </div>
+                ) : (
+                  <>
+                    <span>Xaqiiji</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* VIEW 4: VERIFY EMAIL PASSWORD RESET CODE */}
         {/* ======================================================== */}
         {view === 'verify-code' && (
           <form onSubmit={handleVerifyResetCodeSubmit} className="space-y-4 view-enter">
@@ -687,17 +933,17 @@ export const AuthPage: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => navigateTo('login')}
+                onClick={() => navigateTo('forgot-password')}
                 className="text-[12px] text-[#718096] hover:text-[#1a202c] mt-2 cursor-pointer transition-colors"
               >
-                ← Ku noqo Login
+                ← Ku noqo Soo-kabashada
               </button>
             </div>
           </form>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 5: CREATE NEW PASSWORD */}
+        {/* VIEW 5: CREATE NEW PASSWORD (PART 10) */}
         {/* ======================================================== */}
         {view === 'new-password' && (
           <form onSubmit={handleSaveNewPassword} className="space-y-4 view-enter">
@@ -758,7 +1004,7 @@ export const AuthPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <span>Kaydi Password-ka</span>
+                  <span>Samee Password Cusub</span>
                   <CheckCircle2 className="w-4 h-4" />
                 </>
               )}
@@ -775,7 +1021,7 @@ export const AuthPage: React.FC = () => {
               <CheckCircle2 className="w-8 h-8 text-emerald-700 animate-checkmark" />
             </div>
 
-            <h2 className="text-[20px] font-bold text-[#1a202c]">Password-kaaga si guul leh ayaa loo cusbooneysiiyay.</h2>
+            <h2 className="text-[20px] font-bold text-[#1a202c]">Password-ka waa la cusboonaysiiyay.</h2>
             <p className="text-[13.5px] text-[#718096] max-w-xs mx-auto leading-relaxed">
               Waxaad hadda ku geli kartaa email-kaaga iyo password-kaaga cusub.
             </p>
@@ -784,14 +1030,14 @@ export const AuthPage: React.FC = () => {
               onClick={() => navigateTo('login')}
               className="w-full py-3 px-4 rounded-xl bg-[#0e382b] hover:bg-[#092b21] text-white text-[14px] font-bold flex items-center justify-center gap-2 shadow-md transition-all btn-press mt-4 cursor-pointer"
             >
-              <span>Gal</span>
+              <span>Ku noqo Login</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* ======================================================== */}
-        {/* VIEW 7: NEW USER WELCOME ANIMATION (ELEGANT & AUTOMATIC) */}
+        {/* VIEW 7: NEW USER SUCCESS & ONBOARDING (PART 6) */}
         {/* ======================================================== */}
         {view === 'welcome-new-user' && (
           <div className="text-center space-y-5 py-6 view-enter">
@@ -804,10 +1050,14 @@ export const AuthPage: React.FC = () => {
 
             <div className="space-y-2">
               <h2 className="text-[22px] font-bold text-[#1a202c] tracking-tight">
-                Ku soo dhawoow Xasuus
+                Ku soo dhowow Xasuus
               </h2>
-              <p className="text-[13.5px] text-[#718096] leading-relaxed max-w-xs mx-auto">
-                Keydka xasuustaada meel ammaan ah.
+              <div className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 animate-checkmark" />
+                <span>Furaha soo-kabashada waa la kaydiyay.</span>
+              </div>
+              <p className="text-[13px] text-[#718096] leading-relaxed max-w-xs mx-auto pt-1">
+                Xasuustaada waa diyaar. Keydkaaga gaarka ah hadda ayaa la furayaa.
               </p>
             </div>
 

@@ -9,7 +9,12 @@ import {
   Camera,
   CheckCircle2,
   AlertCircle,
-  X
+  X,
+  Key,
+  Copy,
+  ShieldAlert,
+  KeyRound,
+  RefreshCw
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +22,7 @@ import { AuthService } from '../services/authService';
 
 export const ProfilePage: React.FC = () => {
   const { currentUser, stats } = useApp();
-  const { register, updateProfile } = useAuth();
+  const { register, updateProfile, generateRecoveryKeyForUser } = useAuth();
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(currentUser.name);
@@ -31,6 +36,11 @@ export const ProfilePage: React.FC = () => {
   const [photoSuccess, setPhotoSuccess] = useState<string | null>(null);
   const [isPhotoSaving, setIsPhotoSaving] = useState(false);
 
+  // Recovery Key State in Profile
+  const [newGeneratedKey, setNewGeneratedKey] = useState<string | null>(null);
+  const [isKeyCopied, setIsKeyCopied] = useState(false);
+  const [isGeneratingKey, setIsGeneratingKey] = useState(false);
+
   // New Account Creation (Admin/Dev section)
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
@@ -39,6 +49,8 @@ export const ProfilePage: React.FC = () => {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const registeredAccounts = AuthService.getAccounts();
+  const currentAccount = registeredAccounts.find(a => a.id === currentUser.id);
+  const hasExistingKey = Boolean(currentAccount?.recoveryKeyHash);
 
   // Save Name & Bio
   const handleSaveProfile = (e: React.FormEvent) => {
@@ -105,6 +117,28 @@ export const ProfilePage: React.FC = () => {
       setPhotoError('Khalad ayaa dhacay xilliga kaydinta sawirka.');
     } finally {
       setIsPhotoSaving(false);
+    }
+  };
+
+  // Generate/Regenerate Recovery Key for authenticated user
+  const handleGenerateRecoveryKey = async () => {
+    setIsGeneratingKey(true);
+    const res = await generateRecoveryKeyForUser(currentUser.id);
+    setIsGeneratingKey(false);
+    if (res.success && res.recoveryKey) {
+      setNewGeneratedKey(res.recoveryKey);
+      setPhotoSuccess('Recovery Key cusub ayaa si guul leh loo sameeyay.');
+      setTimeout(() => setPhotoSuccess(null), 3000);
+    } else {
+      setPhotoError(res.error || 'Lama samayn karin Recovery Key.');
+    }
+  };
+
+  const handleCopyGeneratedKey = () => {
+    if (newGeneratedKey) {
+      navigator.clipboard.writeText(newGeneratedKey);
+      setIsKeyCopied(true);
+      setTimeout(() => setIsKeyCopied(false), 2500);
     }
   };
 
@@ -340,6 +374,76 @@ export const ProfilePage: React.FC = () => {
                 <div className="text-[12px] text-[#718096] font-medium mt-0.5">Xasuusiyayaal</div>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* Security & Recovery Key Section (Parts 18 & 19) */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-[#ece9df] shadow-xs space-y-4 card-subtle">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#f0ede0]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-100 text-[#0e382b] flex items-center justify-center shadow-2xs">
+              <KeyRound className="w-5 h-5 text-[#0e382b]" />
+            </div>
+            <div>
+              <h3 className="font-bold text-[17px] text-[#1a202c]">Amniga & Recovery Key (Security)</h3>
+              <p className="text-[13px] text-[#718096]">
+                Furaha soo-kabashada wuxuu kaa caawinayaa inaad akoonkaaga hesho haddii aad password-ka illowdo.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[12px] font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300/60">
+              {hasExistingKey ? 'Recovery Key: Saved' : 'Recovery Key: Ma jiro'}
+            </span>
+            <button
+              type="button"
+              onClick={handleGenerateRecoveryKey}
+              disabled={isGeneratingKey}
+              className="px-4 py-2 rounded-xl bg-[#0e382b] hover:bg-[#092b21] disabled:opacity-50 text-white text-[12.5px] font-bold flex items-center gap-1.5 shadow-sm transition-all cursor-pointer btn-press"
+            >
+              {isGeneratingKey ? (
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Key className="w-3.5 h-3.5" />
+              )}
+              <span>{hasExistingKey ? 'Dib u samee Key cusub' : 'Samee Recovery Key'}</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Display New Generated Key only once in Profile */}
+        {newGeneratedKey && (
+          <div className="p-4 rounded-2xl bg-[#fbf9f0] border-2 border-emerald-500/40 space-y-3 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <span className="text-[12px] font-bold text-[#0e382b] uppercase tracking-wide">
+                Furahaaga Cusub (Hal mar ayaad arki kartaa)
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyGeneratedKey}
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-white hover:bg-emerald-50 border border-emerald-600/30 text-emerald-800 text-xs font-semibold cursor-pointer shadow-2xs btn-press"
+              >
+                {isKeyCopied ? (
+                  <>
+                    <Check className="w-3 h-3 text-emerald-600" />
+                    <span>✓ La koobiyeeyay!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Koobiyeey</span>
+                  </>
+                )}
+              </button>
+            </div>
+            <div className="text-[22px] font-mono font-bold tracking-[0.2em] text-[#0e382b] bg-white py-2.5 px-4 rounded-xl border border-[#ece9df] text-center select-all">
+              {newGeneratedKey}
+            </div>
+            <p className="text-[11.5px] text-[#718096]">
+              ⚠️ Furahan si ammaan ah u qoro ama u kaydi. Dib looma tusi doono.
+            </p>
           </div>
         )}
       </div>

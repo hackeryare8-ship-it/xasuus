@@ -8,10 +8,13 @@ interface AuthContextType {
   session: AuthSession | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; session?: AuthSession; user?: UserProfile; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; session?: AuthSession; user?: UserProfile; error?: string }>;
+  register: (name: string, email: string, password: string, customRecoveryKey?: string) => Promise<{ success: boolean; session?: AuthSession; user?: UserProfile; recoveryKey?: string; error?: string }>;
   sendResetCode: (email: string) => Promise<{ success: boolean; code?: string; error?: string }>;
   verifyResetCode: (email: string, code: string) => { success: boolean; error?: string };
   resetPassword: (email: string, code: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  verifyRecoveryKey: (email: string, recoveryKey: string) => Promise<{ success: boolean; error?: string }>;
+  resetPasswordWithRecoveryKey: (email: string, recoveryKey: string, newPassword: string) => Promise<{ success: boolean; error?: string }>;
+  generateRecoveryKeyForUser: (userId: string) => Promise<{ success: boolean; recoveryKey?: string; error?: string }>;
   activateSession: (session: AuthSession) => void;
   updateProfile: (updates: Partial<UserProfile>) => UserProfile | null;
   logout: () => void;
@@ -65,13 +68,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  const register = async (name: string, email: string, password: string) => {
-    const result = await AuthService.register(name, email, password);
+  const register = async (name: string, email: string, password: string, customRecoveryKey?: string) => {
+    const result = await AuthService.register(name, email, password, customRecoveryKey);
     if (result.success && result.session) {
       return { 
         success: true, 
         session: result.session, 
-        user: result.user || result.session.user 
+        user: result.user || result.session.user,
+        recoveryKey: result.recoveryKey
       };
     }
     return { 
@@ -92,6 +96,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return await AuthService.resetPassword(email, code, newPassword);
   };
 
+  const verifyRecoveryKey = async (email: string, recoveryKey: string) => {
+    return await AuthService.verifyRecoveryKey(email, recoveryKey);
+  };
+
+  const resetPasswordWithRecoveryKey = async (email: string, recoveryKey: string, newPassword: string) => {
+    return await AuthService.resetPasswordWithRecoveryKey(email, recoveryKey, newPassword);
+  };
+
+  const generateRecoveryKeyForUser = async (userId: string) => {
+    return await AuthService.generateRecoveryKeyForUser(userId);
+  };
+
   const logout = useCallback(() => {
     AuthService.logout();
     setSession(null);
@@ -100,8 +116,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <AuthContext.Provider
       value={{
-        isAuthenticated: !!session,
-        user: session ? session.user : null,
+        isAuthenticated: Boolean(session && session.user),
+        user: session?.user || null,
         session,
         isLoading,
         login,
@@ -109,6 +125,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sendResetCode,
         verifyResetCode,
         resetPassword,
+        verifyRecoveryKey,
+        resetPasswordWithRecoveryKey,
+        generateRecoveryKeyForUser,
         activateSession,
         updateProfile,
         logout
